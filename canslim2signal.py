@@ -1,44 +1,43 @@
-import streamlit as st
 import yfinance as yf
 import pandas as pd
 import numpy as np
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+import streamlit as st
+
+st.set_page_config(layout="wide")
 
 # -----------------------------
-# Sidebar: Strategy Parameters
+# Config
 # -----------------------------
-
-st.sidebar.title("Strategy Parameters")
-
-long_sma = st.sidebar.number_input("Long SMA", value=100)
-short_ema = st.sidebar.number_input("Short EMA", value=20)
-rsi_window = st.sidebar.number_input("RSI Window", value=14)
-vol_sma = st.sidebar.number_input("Volume SMA", value=20)
-atr_window = st.sidebar.number_input("ATR Window", value=14)
-adx_window = st.sidebar.number_input("ADX Window", value=14)
-
-rsi_bull = st.sidebar.slider("RSI Bull Threshold", 0.0, 100.0, value=55.0)
-rsi_bear = st.sidebar.slider("RSI Bear Threshold", 0.0, 100.0, value=45.0)
-atr_risk_cut = st.sidebar.slider("ATR Risk Cutoff", 0.0, 0.1, value=0.02)
-adx_trend_thr = st.sidebar.slider("ADX Trend Threshold", 0.0, 100.0, value=20.0)
-
-bullish_position = st.sidebar.selectbox("Bullish Position", [1.0, 0.5, 0.0], index=0)
-neutral_position = st.sidebar.selectbox("Neutral Position", [1.0, 0.5, 0.0], index=1)
-bearish_position = st.sidebar.selectbox("Bearish Position", [1.0, 0.5, 0.0], index=2)
+@dataclass
+class StrategyConfig:
+    long_sma: int = 100
+    short_ema: int = 20
+    rsi_window: int = 14
+    atr_window: int = 14
+    adx_window: int = 14
+    rsi_bull: float = 55.0
+    rsi_bear: float = 45.0
+    atr_risk_cut: float = 0.02
+    adx_trend_thr: float = 20.0
+    short_sma_period: int = 10  # Short-term SMA period
+    long_sma_period: int = 30  # Long-term SMA period
+    lookback: int = 100  # Lookback for momentum, RSI, etc.
 
 # -----------------------------
-# Indicator Functions
+# Indicators
 # -----------------------------
-
-def rsi(series, window):
+def rsi(series: pd.Series, window: int) -> pd.Series:
     delta = series.diff()
-    up = np.where(delta > 0, delta, 0.0)
-    down = np.where(delta < 0, -delta, 0.0)
-    up_ema = pd.Series(up, index=series.index).ewm(alpha=1/window, adjust=False).mean()
-    down_ema = pd.Series(down, index=series.index).ewm(alpha=1/window, adjust=False).mean()
-    rs = up_ema / down_ema.replace(0, np.nan)
+    gain = delta.clip(lower=0)
+    loss = -delta.clip(upper=0)
+    roll_up = gain.rolling(window, min_periods=window).mean()
+    roll_down = loss.rolling(window, min_periods=window).mean()
+    rs = roll_up / roll_down.replace(0, np.nan)
     return 100 - (100 / (1 + rs))
 
-def atr(high, low, close, window):
+def atr(high: pd.Series, low: pd.Series, close: pd.Series, window: int) -> pd.Series:
     prev_close = close.shift(1)
     tr = pd.concat([
         (high - low),
@@ -47,96 +46,182 @@ def atr(high, low, close, window):
     ], axis=1).max(axis=1)
     return tr.rolling(window, min_periods=1).mean()
 
-def adx_like(high, low, close, window):
+def adx_like(high: pd.Series, low: pd.Series, close: pd.Series, window: int) -> pd.Series:
     atr_val = atr(high, low, close, window)
-    price_range = close.rolling(window).max() - close.rolling(window).min()
+    price_range = (close.rolling(window).max() - close.rolling(window).min())
     strength = (atr_val / price_range.replace(0, np.nan)).clip(0, 1)
-    return strength.rolling(window, min_periods=1).mean() * 100
+    return (strength.rolling(window, min_periods=1).mean() * 100)
 
 # -----------------------------
-# Signal Logic
+# Compute score
 # -----------------------------
+def compute_indicators_and_score(prices: pd.DataFrame, cfg: StrategyConfig) -> pd.DataFrame:
+    trend_weight = 1.0
+    rsi_weight = 0.8
+    risk_adj_mom_weight = 1.0
+    sma_crossover_signal_weight = 1.0
 
-def classify_regime(df):
-    close = df["Close"]
-    high = df["High"]
-    low = df["Low"]
-    vol = df["Volume"]
+    # Short-term and Long-term SMAs
+    sma_short = prices.rolling(cfg.short_sma_period, min_periods=cfg.short_sma_period).mean()
+    sma_long = prices.rolling(cfg.long_sma_period, min_periods=cfg.long_sma_period).mean()
 
-    df["SMA_long"] = close.rolling(long_sma).mean()
-    df["EMA_short"] = close.ewm(span=short_ema, adjust=False).mean()
-    df["RSI"] = rsi(close, rsi_window)
-    df["Vol_SMA"] = vol.rolling(vol_sma).mean()
-    df["UpDay"] = (close > close.shift(1)).astype(int)
-    df["VolConfirm"] = ((vol > 1.1 * df["Vol_SMA"]) & (df["UpDay"] == 1)).astype(int)
-    df["ATR"] = atr(high, low, close, atr_window)
-    df["ADX_like"] = adx_like(high, low, close, adx_window)
+    # SMA Crossover signal: 1 for short > long, -1 for short < long
+    sma_crossover_signal = (sma_short > sma_long).astype(int) * 2 - 1  # 1 for uptrend, -1 for downtrend
 
-    latest = df.iloc[-1]
-    date = df.index[-1].date()
+    # RSI(lookback)
+    rsi_val = rsi(prices, cfg.rsi_window)
 
-    trend_up = latest["Close"] > latest["SMA_long"] and latest["EMA_short"] > latest["SMA_long"]
-    trend_down = latest["Close"] < latest["SMA_long"] and latest["EMA_short"] < latest["SMA_long"]
-    momentum_bull = latest["RSI"] >= rsi_bull
-    momentum_bear = latest["RSI"] <= rsi_bear
-    vol_confirm = latest["VolConfirm"] == 1
-    trend_strength_ok = latest["ADX_like"] >= adx_trend_thr
-    high_vol = (latest["ATR"] / latest["Close"]) >= atr_risk_cut
+    # Momentum (lookback-period return)
+    mom = prices / prices.shift(cfg.lookback) - 1
 
-    bull = trend_up and momentum_bull and (vol_confirm or trend_strength_ok) and not high_vol
+    # Volatility (lookback-period std of returns)
+    ret = prices.pct_change()
+    vol = ret.rolling(cfg.lookback, min_periods=cfg.lookback).std()
+
+    # Normalize momentum by volatility (risk-adjusted)
+    risk_adj_mom = mom / (vol + 1e-9)
+
+    # Base trend signal and RSI strength
+    trend = (prices > sma_short).astype(int)  # Trend signal based on short SMA
+    rsi_strength = ((rsi_val < 30).astype(int)) - ((rsi_val > 70).astype(int))
+
+    # Score: weighted sum (tune as needed)
+    score = trend_weight * trend + rsi_weight * rsi_strength + risk_adj_mom_weight * risk_adj_mom + sma_crossover_signal_weight * sma_crossover_signal
+
+    # Shift(1) to avoid lookahead
+    return score.shift(1)
+
+# -----------------------------
+# Core Calculation
+# -----------------------------
+def compute_today_row(ticker: str, cfg: StrategyConfig):
+    lookback = max(cfg.long_sma, cfg.short_ema, cfg.rsi_window,
+                   cfg.atr_window, cfg.adx_window) + 5
+    start_date = datetime.today() - timedelta(days=lookback*2)
+
+    df = yf.download(ticker, start=start_date.strftime("%Y-%m-%d"),
+                     interval="1d", auto_adjust=True, progress=False)
+
+    if df.empty:
+        return None
+
+    # Handle MultiIndex columns
+    if isinstance(df.columns, pd.MultiIndex):
+        df = df.xs(ticker, level=1, axis=1)
+
+    close, high, low, vol = df["Close"], df["High"], df["Low"], df["Volume"]
+
+    sma_long = close.rolling(cfg.long_sma).mean().iloc[-1]
+    ema_short = close.ewm(span=cfg.short_ema, adjust=False).mean().iloc[-1]
+    rsi_val = rsi(close, cfg.rsi_window).iloc[-1]
+    atr_val = atr(high, low, close, cfg.atr_window).iloc[-1]
+    adx_val = adx_like(high, low, close, cfg.adx_window).iloc[-1]
+
+    # --- Score Calculation ---
+    score = compute_indicators_and_score(close, cfg).iloc[-1]
+
+    # --- Regime logic ---
+    trend_up = (close.iloc[-1] > sma_long) and (ema_short > sma_long)
+    trend_down = (close.iloc[-1] < sma_long) and (ema_short < sma_long)
+    momentum_bull = rsi_val >= cfg.rsi_bull
+    momentum_bear = rsi_val <= cfg.rsi_bear
+    trend_strength_ok = adx_val >= cfg.adx_trend_thr
+    high_vol = (atr_val / close.iloc[-1]) >= cfg.atr_risk_cut
+
+    bull = trend_up and momentum_bull and trend_strength_ok and (not high_vol)
     bear = trend_down and (momentum_bear or high_vol)
 
     if bull:
-        regime = "bullish"
-        signal = bullish_position
+        regime = "BUY"
     elif bear:
-        regime = "bearish"
-        signal = bearish_position
+        regime = "SELL"
     else:
-        regime = "neutral"
-        signal = neutral_position
+        regime = "HOLD"
+
+    latest_date = df.index[-1].strftime("%Y-%m-%d")
+    live_price = yf.Ticker(ticker).fast_info['last_price']
 
     return {
-        "Date": date,
+        "Date": latest_date,
+        "Ticker": ticker,
         "Regime": regime,
-        "Signal": signal,
-        "RSI": round(latest["RSI"], 2),
-        "EMA": round(latest["EMA_short"], 2),
-        "SMA": round(latest["SMA_long"], 2),
-        "ATR": round(latest["ATR"], 2),
-        "ADX": round(latest["ADX_like"], 2),
-        "Vol_SMA": round(latest["Vol_SMA"], 2)
+        "Score": round(score, 2),
+        "SMA_Long": round(sma_long, 2),
+        "EMA_Short": round(ema_short, 2),
+        "RSI": round(rsi_val, 2),
+        "ATR": round(atr_val, 4),
+        "ADX": round(adx_val, 2),
+        "Live Price": round(live_price, 2)
     }
 
 # -----------------------------
-# App UI
+# Streamlit App
 # -----------------------------
+def app():
+    st.title('Stock Trading Signals with Strategy Analysis')
 
-st.title("📡 Real-Time Signal Dashboard")
+    # Ask the user to input tickers
+    tickers_input = st.text_input(
+        "Enter Stock Tickers (comma separated, e.g. AAPL, MSFT, TSLA)"
+    )
 
-tickers_input = st.text_input("Enter comma-separated tickers", value="AAPL,MSFT,NVDA")
-tickers = [t.strip().upper() for t in tickers_input.split(",") if t.strip()]
+    # Display the sidebar only when the user inputs tickers
+    if tickers_input:
+        st.sidebar.header("Configure Strategy")
 
-if tickers:
-    st.subheader("Signal Recommendations for Next Day")
-    signal_rows = []
+        # Input for StrategyConfig parameters
+        long_sma = st.sidebar.slider("Long SMA Period", 10, 200, 100)
+        short_ema = st.sidebar.slider("Short EMA Period", 5, 100, 20)
+        rsi_window = st.sidebar.slider("RSI Window", 5, 50, 14)
+        atr_window = st.sidebar.slider("ATR Window", 5, 50, 14)
+        adx_window = st.sidebar.slider("ADX Window", 5, 50, 14)
+        rsi_bull = st.sidebar.slider("RSI Bull Threshold", 50.0, 70.0, 55.0)
+        rsi_bear = st.sidebar.slider("RSI Bear Threshold", 30.0, 50.0, 45.0)
+        atr_risk_cut = st.sidebar.slider("ATR Risk Cut Threshold", 0.005, 0.05, 0.02)
+        adx_trend_thr = st.sidebar.slider("ADX Trend Strength Threshold", 10.0, 50.0, 20.0)
 
-    max_window = max(long_sma, short_ema, rsi_window, vol_sma, atr_window, adx_window)
-    lookback = max_window + 5
+        # Create the config based on sidebar input
+        cfg = StrategyConfig(
+            long_sma=long_sma,
+            short_ema=short_ema,
+            rsi_window=rsi_window,
+            atr_window=atr_window,
+            adx_window=adx_window,
+            rsi_bull=rsi_bull,
+            rsi_bear=rsi_bear,
+            atr_risk_cut=atr_risk_cut,
+            adx_trend_thr=adx_trend_thr
+        )
 
-    for ticker in tickers:
-        try:
-            df = yf.download(ticker, period=f"{lookback}d", interval="1d", auto_adjust=True)
-            if len(df) < lookback:
-                signal_rows.append({"Ticker": ticker, "Date": "—", "Regime": "insufficient data", "Signal": "—"})
-                continue
+        # Parse the tickers
+        tickers = [x.strip() for x in tickers_input.split(",")]
 
-            signal_info = classify_regime(df)
-            signal_info["Ticker"] = ticker
-            signal_rows.append(signal_info)
-        except Exception as e:
-            signal_rows.append({"Ticker": ticker, "Date": "—", "Regime": "error", "Signal": str(e)})
+        # Calculate signals for the tickers
+        results = []
+        for t in tickers:
+            row = compute_today_row(t, cfg)
+            if row:
+                results.append(row)
 
-    st.dataframe(pd.DataFrame(signal_rows)[[
-        "Ticker", "Date", "Signal", "Regime", "RSI", "EMA", "SMA", "ATR", "ADX", "Vol_SMA"
-    ]])
+        if results:
+            # Display the results with color coding
+            df = pd.DataFrame(results, columns=["Date", "Ticker", "Live Price", "Regime", "Score", "SMA_Long", "EMA_Short", "RSI", "ATR", "ADX"])
+
+            # Color coding based on 'Regime' column
+            def colorize(val):
+                if val == "BUY":
+                    return 'background-color: green; color: white'
+                elif val == "SELL":
+                    return 'background-color: red; color: white'
+                elif val == "HOLD":
+                    return 'background-color: yellow; color: black'
+                return ''
+
+            styled_df = df.style.applymap(colorize, subset=['Regime'])
+
+            st.dataframe(styled_df, use_container_width=True)
+        else:
+            st.write("No valid data found for the given tickers.")
+
+if __name__ == "__main__":
+    app()
