@@ -207,7 +207,7 @@ def app():
 
         if results:
             # Display the results with color coding
-            df = pd.DataFrame(results, columns=["Date", "Ticker", "Live Price", "Regime", "Score", "SMA_Long", "EMA_Short", "RSI", "ATR", "ADX"])
+            df = pd.DataFrame(results, columns=["Date", "Ticker", "Live Price", "Regime", "Analyst", "Score", "SMA_Long", "EMA_Short", "RSI", "ATR", "ADX"])
 
             # Color coding based on 'Regime' column
             def colorize(val):
