@@ -140,11 +140,13 @@ def compute_today_row(ticker: str, cfg: StrategyConfig):
 
     latest_date = df.index[-1].strftime("%Y-%m-%d")
     live_price = yf.Ticker(ticker).fast_info['last_price']
+    analyst_recco = yf.Ticker(ticker).info["recommendationKey"]
 
     return {
         "Date": latest_date,
         "Ticker": ticker,
         "Regime": regime,
+        "Analyst":analyst_recco,
         "Score": round(score, 2),
         "SMA_Long": round(sma_long, 2),
         "EMA_Short": round(ema_short, 2),
