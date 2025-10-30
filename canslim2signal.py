@@ -4,6 +4,9 @@ import numpy as np
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 import streamlit as st
+import streamlit as st
+import streamlit.components.v1 as components
+import json
 
 st.set_page_config(layout="wide")
 
@@ -224,6 +227,82 @@ def app():
             st.dataframe(styled_df, use_container_width=True)
         else:
             st.write("No valid data found for the given tickers.")
+
+        st.title("TradingView Technical Analysis Widgets for NSE Tickers")
+
+        # # --- User Input ---
+        # tickers_input1 = st.text_input(
+        #     "Enter NSE tickers (comma separated). Examples: ADANIENT.NS, RELIANCE.NS, INFY.NS",
+        #     value="ADANIENT.NS, BSE.NS, RELIANCE.NS, INFY.NS, TCS.NS, HDFCBANK.NS"
+        # )
+
+        # --- Interval Dropdown ---
+        interval_map = {
+            "1 minute": "1m",
+            "5 minutes": "5m",
+            "15 minutes": "15m",
+            "30 minutes": "30m",
+            "1 hour": "1h",
+            "2 hours": "2h",
+            "4 hours": "4h",
+            "1 day": "1D",
+            "1 week": "1W",
+            "1 month": "1M"
+        }
+
+        selected_interval_label = st.selectbox(
+            "Select Default Interval",
+            list(interval_map.keys()),
+            index=list(interval_map.keys()).index("1 day")
+        )
+        selected_interval = interval_map[selected_interval_label]
+
+        # --- Render Widgets ---
+        if tickers_input:
+            tickers = [t.strip() for t in tickers_input.split(",") if t.strip()]
+
+            if not tickers:
+                st.warning("No valid tickers parsed from input.")
+            else:
+                st.markdown("---")
+                st.write(f"Rendering {len(tickers)} TradingView widgets (default interval: **{selected_interval_label}**)")
+
+                # Display widgets 3 per row
+                for i in range(0, len(tickers), 3):
+                    cols = st.columns(3)
+                    for j in range(3):
+                        if i + j < len(tickers):
+                            t = tickers[i + j]
+                            base_symbol = t.split(".")[0].upper()
+
+                            with cols[j]:
+                                st.markdown(f"#### {base_symbol}")
+
+                                config = {
+                                    "colorTheme": "light",
+                                    "displayMode": "single",
+                                    "isTransparent": False,
+                                    "locale": "en",
+                                    "interval": selected_interval,
+                                    "width": "100%",
+                                    "height": 450,
+                                    "symbol": f"NSE:{base_symbol}",
+                                    "showIntervalTabs": True
+                                }
+
+                                json_config = json.dumps(config)
+
+                                widget_html = f"""
+                                <!-- TradingView Widget BEGIN -->
+                                <div class="tradingview-widget-container">
+                                <div class="tradingview-widget-container__widget"></div>
+                                <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-technical-analysis.js" async>
+                                {json_config}
+                                </script>
+                                </div>
+                                <!-- TradingView Widget END -->
+                                """
+                                components.html(widget_html, height=520, scrolling=False)
 
 
 if __name__ == "__main__":
