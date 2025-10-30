@@ -247,7 +247,8 @@ def app():
             "4 hours": "4h",
             "1 day": "1D",
             "1 week": "1W",
-            "1 month": "1M"
+            "1 month": "1M",
+            "1 year" : "1Y"
         }
 
         selected_interval_label = st.selectbox(
