@@ -225,5 +225,61 @@ def app():
         else:
             st.write("No valid data found for the given tickers.")
 
+
+ # -------------------------------
+        # 🔽 ADD TRADINGVIEW WIDGETS BELOW
+        # -------------------------------
+        st.subheader("Technical Analysis Widgets")
+
+        interval_map = {
+            "1 minute": "1m",
+            "5 minutes": "5m",
+            "15 minutes": "15m",
+            "30 minutes": "30m",
+            "1 hour": "1h",
+            "2 hours": "2h",
+            "4 hours": "4h",
+            "1 day": "1D",
+            "1 week": "1W",
+            "1 month": "1M"
+        }
+
+        selected_interval_label = st.selectbox(
+            "Select Interval",
+            list(interval_map.keys()),
+            index=7  # default: 2 hours
+        )
+        selected_interval = interval_map[selected_interval_label]
+
+        for t in tickers:
+            symbol = t.split(".")[0]  # remove .NS or other suffix
+            st.markdown(f"### {symbol}")
+
+            # Embed TradingView widget
+            widget_html = f"""
+            <!-- TradingView Widget BEGIN -->
+            <div class="tradingview-widget-container">
+              <div class="tradingview-widget-container__widget"></div>
+              <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-technical-analysis.js" async>
+              {{
+              "colorTheme": "light",
+              "displayMode": "single",
+              "isTransparent": false,
+              "locale": "en",
+              "interval": "{selected_interval}",
+              "width": "100%",
+              "height": 450,
+              "symbol": "NSE:{symbol}",
+              "showIntervalTabs": true
+              }}
+              </script>
+            </div>
+            <!-- TradingView Widget END -->
+            """
+            components.html(widget_html, height=500)
+
+    else:
+        st.write("No valid data found for the given tickers.")
+
 if __name__ == "__main__":
     app()
