@@ -7,6 +7,7 @@ import streamlit as st
 import streamlit as st
 import streamlit.components.v1 as components
 import json
+import pandas_ta as ta
 
 st.set_page_config(layout="wide")
 
@@ -31,29 +32,50 @@ class StrategyConfig:
 # -----------------------------
 # Indicators
 # -----------------------------
+# def rsi(series: pd.Series, window: int) -> pd.Series:
+#     delta = series.diff()
+#     gain = delta.clip(lower=0)
+#     loss = -delta.clip(upper=0)
+#     roll_up = gain.rolling(window, min_periods=window).mean()
+#     roll_down = loss.rolling(window, min_periods=window).mean()
+#     rs = roll_up / roll_down.replace(0, np.nan)
+#     return 100 - (100 / (1 + rs))
+
+# def atr(high: pd.Series, low: pd.Series, close: pd.Series, window: int) -> pd.Series:
+#     prev_close = close.shift(1)
+#     tr = pd.concat([
+#         (high - low),
+#         (high - prev_close).abs(),
+#         (low - prev_close).abs()
+#     ], axis=1).max(axis=1)
+#     return tr.rolling(window, min_periods=1).mean()
+
+# def adx_like(high: pd.Series, low: pd.Series, close: pd.Series, window: int) -> pd.Series:
+#     atr_val = atr(high, low, close, window)
+#     price_range = (close.rolling(window).max() - close.rolling(window).min())
+#     strength = (atr_val / price_range.replace(0, np.nan)).clip(0, 1)
+#     return (strength.rolling(window, min_periods=1).mean() * 100)
+
+
+###################
+# UPDATED manual indicator calculation with pandas_ta for correct parameters
+######################
 def rsi(series: pd.Series, window: int) -> pd.Series:
-    delta = series.diff()
-    gain = delta.clip(lower=0)
-    loss = -delta.clip(upper=0)
-    roll_up = gain.rolling(window, min_periods=window).mean()
-    roll_down = loss.rolling(window, min_periods=window).mean()
-    rs = roll_up / roll_down.replace(0, np.nan)
-    return 100 - (100 / (1 + rs))
+    """Relative Strength Index using pandas_ta"""
+    return ta.rsi(series, length=window)
 
 def atr(high: pd.Series, low: pd.Series, close: pd.Series, window: int) -> pd.Series:
-    prev_close = close.shift(1)
-    tr = pd.concat([
-        (high - low),
-        (high - prev_close).abs(),
-        (low - prev_close).abs()
-    ], axis=1).max(axis=1)
-    return tr.rolling(window, min_periods=1).mean()
+    """Average True Range using pandas_ta"""
+    return ta.atr(high, low, close, length=window)
 
 def adx_like(high: pd.Series, low: pd.Series, close: pd.Series, window: int) -> pd.Series:
-    atr_val = atr(high, low, close, window)
-    price_range = (close.rolling(window).max() - close.rolling(window).min())
-    strength = (atr_val / price_range.replace(0, np.nan)).clip(0, 1)
-    return (strength.rolling(window, min_periods=1).mean() * 100)
+    """
+    ADX using pandas_ta.
+    Returns only the ADX column (not the +DI / -DI).
+    """
+    adx_df = ta.adx(high, low, close, length=window)
+    return adx_df[f"ADX_{window}"]
+
 
 # -----------------------------
 # Compute score
