@@ -74,7 +74,7 @@ def adx_like(high: pd.Series, low: pd.Series, close: pd.Series, window: int) -> 
     Returns only the ADX column (not the +DI / -DI).
     """
     adx_df = ta.adx(high, low, close, length=window)
-    return adx_df[f"ADX_{window}"]
+    return adx_df[[f"DMP_{window}", f"DMN_{window}", f"ADX_{window}"]]
 
 
 # -----------------------------
@@ -141,7 +141,12 @@ def compute_today_row(ticker: str, cfg: StrategyConfig):
     ema_short = close.ewm(span=cfg.short_ema, adjust=False).mean().iloc[-1]
     rsi_val = rsi(close, cfg.rsi_window).iloc[-1]
     atr_val = atr(high, low, close, cfg.atr_window).iloc[-1]
-    adx_val = adx_like(high, low, close, cfg.adx_window).iloc[-1]
+    ############
+    adx_val = adx_like(high, low, close, cfg.adx_window)[f"ADX_{cfg.adx_window}"].iloc[-1]
+    plus_di_val = adx_like(high, low, close, cfg.adx_window)[f"DMP_{cfg.adx_window}"].iloc[-1]
+    minus_di_val = adx_like(high, low, close, cfg.adx_window)[f"DMN_{cfg.adx_window}"].iloc[-1]
+
+    mkt_dir = plus_di_val - minus_di_val
 
     # --- Score Calculation ---
     score = compute_indicators_and_score(close, cfg).iloc[-1]
@@ -179,7 +184,9 @@ def compute_today_row(ticker: str, cfg: StrategyConfig):
         "RSI": round(rsi_val, 2),
         "ATR": round(atr_val, 4),
         "ADX": round(adx_val, 2),
-        "Live Price": round(live_price, 2)
+        "Live Price": round(live_price, 2),
+        "DIR":round(mkt_dir,2),
+     
     }
 
 # -----------------------------
@@ -233,7 +240,7 @@ def app():
 
         if results:
             # Display the results with color coding
-            df = pd.DataFrame(results, columns=["Date", "Ticker", "Live Price", "Regime", "Analyst", "Score", "SMA_Long", "EMA_Short", "RSI", "ATR", "ADX"])
+            df = pd.DataFrame(results, columns=["Date", "Ticker", "Live Price", "Regime", "Analyst", "Score", "SMA_Long", "EMA_Short", "RSI", "ATR", "ADX","DIR"])
 
             # Color coding based on 'Regime' column
             def colorize(val):
