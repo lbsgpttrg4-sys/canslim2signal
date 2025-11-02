@@ -113,8 +113,9 @@ def compute_indicators_and_score(prices: pd.DataFrame, cfg: StrategyConfig) -> p
     # Score: weighted sum (tune as needed)
     score = trend_weight * trend + rsi_weight * rsi_strength + risk_adj_mom_weight * risk_adj_mom + sma_crossover_signal_weight * sma_crossover_signal
 
-    # Shift(1) to avoid lookahead
-    return score.shift(1)
+    # Shift(1) to avoid lookahead; no need to shift
+    # return score.shift(1)
+    return score
 
 # -----------------------------
 # Core Calculation
