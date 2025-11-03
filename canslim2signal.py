@@ -8,6 +8,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 import json
 import pandas_ta as ta
+import time
 
 st.set_page_config(layout="wide")
 
@@ -127,6 +128,7 @@ def compute_today_row(ticker: str, cfg: StrategyConfig):
 
     df = yf.download(ticker, start=start_date.strftime("%Y-%m-%d"),
                      interval="1d", auto_adjust=True, progress=False)
+    time.sleep(1)
 
     if df.empty:
         return None
