@@ -128,7 +128,6 @@ def compute_today_row(ticker: str, cfg: StrategyConfig):
 
     df = yf.download(ticker, start=start_date.strftime("%Y-%m-%d"),
                      interval="1d", auto_adjust=True, progress=False)
-    time.sleep(1)
 
     if df.empty:
         return None
@@ -237,6 +236,7 @@ def app():
         results = []
         for t in tickers:
             row = compute_today_row(t, cfg)
+            time.sleep(1)
             if row:
                 results.append(row)
 
