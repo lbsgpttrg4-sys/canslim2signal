@@ -191,12 +191,13 @@ def compute_today_row(ticker: str, cfg: StrategyConfig):
     rsi_score = max(min(rsi_score, 1.0), -1.0)
     
     # --- 5. ATR volatility as negative factor (-1..0) ---
-    vol_score = (atr_val / (close.iloc[-1] + 1e-9)) / cfg.atr_risk_cut
-    vol_score = -1.0 * max(min(vol_score, 1.0), 0.0)
+
+    vol_score = (atr_val / close.iloc[-1] + 1e-9) / cfg.atr_risk_cut
+    vol_score *= -1.0 * np.sign(signed_trend) 
     
     # --- 6. Weighted combined score ---
     score_raw = (
-        0.8 * trend_score +
+        0.5 * trend_score +
         1.2 * signed_trend +
         0.8 * rsi_score +
         0.6 * vol_score
