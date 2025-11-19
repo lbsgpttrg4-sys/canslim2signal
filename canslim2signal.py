@@ -201,7 +201,7 @@ def compute_today_row(ticker: str, cfg: StrategyConfig):
     
     # --- 7. Thresholds ---
     bull_thr = getattr(cfg, "bull_thr", 0.35)
-    bear_thr = getattr(cfg, "bear_thr", -0.35)
+    bear_thr = getattr(cfg, "bear_thr", -0.15)
     
     # --- 8. Boolean regime decisions ---
     bull = score >= bull_thr
