@@ -151,24 +151,74 @@ def compute_today_row(ticker: str, cfg: StrategyConfig):
 
     # --- Score Calculation ---
     score = compute_indicators_and_score(close, cfg).iloc[-1]
+    ########################OLDONE##############
+    # # --- Regime logic ---
+    # trend_up = (close.iloc[-1] > sma_long) and (ema_short > sma_long)
+    # trend_down = (close.iloc[-1] < sma_long) and (ema_short < sma_long)
+    # momentum_bull = rsi_val >= cfg.rsi_bull
+    # momentum_bear = rsi_val <= cfg.rsi_bear
+    # trend_strength_ok = adx_val >= cfg.adx_trend_thr
+    # high_vol = (atr_val / close.iloc[-1]) >= cfg.atr_risk_cut
 
-    # --- Regime logic ---
-    trend_up = (close.iloc[-1] > sma_long) and (ema_short > sma_long)
-    trend_down = (close.iloc[-1] < sma_long) and (ema_short < sma_long)
-    momentum_bull = rsi_val >= cfg.rsi_bull
-    momentum_bear = rsi_val <= cfg.rsi_bear
-    trend_strength_ok = adx_val >= cfg.adx_trend_thr
-    high_vol = (atr_val / close.iloc[-1]) >= cfg.atr_risk_cut
+    # bull = trend_up and momentum_bull and trend_strength_ok and (not high_vol)
+    # bear = trend_down and (momentum_bear or high_vol)
 
-    bull = trend_up and momentum_bull and trend_strength_ok and (not high_vol)
-    bear = trend_down and (momentum_bear or high_vol)
+    # if bull:
+    #     regime = "BUY"
+    # elif bear:
+    #     regime = "SELL"
+    # else:
+    #     regime = "HOLD"
 
+#uncomment OLDONE block to restore 
+
+
+
+    #############
+    # === Scalar indicator scores ===
+    
+    # Trend (EMA vs SMA)
+    trend_score = (ema_short - sma_long) / sma_long
+    trend_score = max(min(trend_score, 1), -1)
+    # Price relative to SMA long
+    price_score = (close.iloc[-1] - sma_long) / sma_long
+    price_score = max(min(price_score, 1), -1)
+    # RSI momentum
+    rsi_score = (rsi_val - 50) / 50
+    rsi_score = max(min(rsi_score, 1), -1)
+    # ADX trend strength
+    adx_score = adx_val / cfg.adx_trend_thr
+    adx_score = max(min(adx_score, 1), 0)   # ADX can't be negative
+    # ATR Volatility
+    vol_score = (atr_val / close.iloc[-1]) / cfg.atr_risk_cut
+    vol_score = max(min(vol_score, 1), 0)
+    # === Final combined score ===
+    score = (
+        1.0 * trend_score +
+        1.0 * price_score +
+        0.8 * rsi_score +
+        0.8 * adx_score +
+        0.5 * vol_score
+    )
+    
+    # === Thresholds ===
+    bull_thr = 1.0
+    bear_thr = -1.0
+    # === Binary decisions (compatible with your old regime code) ===
+    bull = score >= bull_thr
+    bear = score <= bear_thr
+    # === Regime ===
     if bull:
         regime = "BUY"
     elif bear:
         regime = "SELL"
     else:
         regime = "HOLD"
+
+
+    ####################################33
+
+    
 
     latest_date = df.index[-1].strftime("%Y-%m-%d")
     live_price = yf.Ticker(ticker).fast_info['last_price']
