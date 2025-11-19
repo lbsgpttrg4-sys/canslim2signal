@@ -171,49 +171,62 @@ def compute_today_row(ticker: str, cfg: StrategyConfig):
     #     regime = "HOLD"
 
 #uncomment OLDONE block to restore 
-
-
-
-    #############
-    # === Scalar indicator scores ===
+###############NEW REGIME BLOCK
+    # --- 2. Scalar DM direction (-1..+1) ---
+    dm_scalar = (plus_di_val - minus_di_val) / (plus_di_val + minus_di_val + 1e-9)
+    dm_scalar = max(min(dm_scalar, 1.0), -1.0)
     
-    # Trend (EMA vs SMA)
-    trend_score = (ema_short - sma_long) / sma_long
-    trend_score = max(min(trend_score, 1), -1)
-    # Price relative to SMA long
-    price_score = (close.iloc[-1] - sma_long) / sma_long
-    price_score = max(min(price_score, 1), -1)
-    # RSI momentum
-    rsi_score = (rsi_val - 50) / 50
-    rsi_score = max(min(rsi_score, 1), -1)
-    # ADX trend strength
-    adx_score = adx_val / cfg.adx_trend_thr
-    adx_score = max(min(adx_score, 1), 0)   # ADX can't be negative
-    # ATR Volatility
-    vol_score = (atr_val / close.iloc[-1]) / cfg.atr_risk_cut
-    vol_score = max(min(vol_score, 1), 0)
-    # === Final combined score ===
-    score = (
-        1.0 * trend_score +
-        1.0 * price_score +
-        0.8 * rsi_score +
-        0.8 * adx_score +
-        0.5 * vol_score
-    )
+    # --- 3. ADX magnitude normalized (0..1) ---
+    adx_val = adx_like(high, low, close, cfg.adx_window)["ADX"].iloc[-1]
+    adx_norm = adx_val / getattr(cfg, "adx_norm", 50.0)
+    adx_norm = max(min(adx_norm, 1.0), 0.0)
     
-    # === Thresholds ===
-    bull_thr = 1.0
-    bear_thr = -1.0
-    # === Binary decisions (compatible with your old regime code) ===
-    bull = score >= bull_thr
-    bear = score <= bear_thr
-    # === Regime ===
+    # --- 4. Signed trend strength (-1..+1) ---
+    signed_trend = adx_norm * dm_scalar
+    signed_trend = max(min(signed_trend, 1.0), -1.0)
+    
+    # --- 5. EMA/SMA & price trend scores (-1..+1) ---
+    trend_score = ((ema_short - sma_long) + (close.iloc[-1] - sma_long)) / (sma_long + 1e-9)
+    trend_score = max(min(trend_score, 1.0), -1.0)
+    
+    # --- 6. RSI momentum (-1..+1) ---
+    rsi_score = (rsi_val - 50.0) / 50.0
+    rsi_score = max(min(rsi_score, 1.0), -1.0)
+    
+    # --- 7. ATR volatility as a negative factor (-1..0) ---
+    vol_score = (atr_val / (close.iloc[-1] + 1e-9)) / cfg.atr_risk_cut
+    vol_score = -1.0 * max(min(vol_score, 1.0), 0.0)
+    
+    # --- 8. Weighted scalar score ---
+    w_trend = 1.0
+    w_signed_trend = 1.0
+    w_rsi = 0.8
+    w_vol = 0.6
+    
+    score_raw = (w_trend * trend_score +
+                 w_signed_trend * signed_trend +
+                 w_rsi * rsi_score +
+                 w_vol * vol_score)
+    
+    # Optional normalization
+    score1 = score_raw / (w_trend + w_signed_trend + w_rsi + w_vol)
+    
+    # --- 9. Thresholds for regime ---
+    bull_thr = getattr(cfg, "bull_thr", 0.35)
+    bear_thr = getattr(cfg, "bear_thr", -0.35)
+    
+    # --- 10. Booleans compatible with original regime code ---
+    bull = score1 >= bull_thr
+    bear = score1 <= bear_thr
+    
+    # --- 11. Regime ---
     if bull:
         regime = "BUY"
     elif bear:
         regime = "SELL"
     else:
         regime = "HOLD"
+
 
 
     ####################################33
