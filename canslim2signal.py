@@ -196,8 +196,8 @@ def compute_today_row(ticker: str, cfg: StrategyConfig):
     
     # --- 6. Weighted combined score ---
     score_raw = (
-        1.0 * trend_score +
-        1.0 * signed_trend +
+        0.8 * trend_score +
+        1.2 * signed_trend +
         0.8 * rsi_score +
         0.6 * vol_score
     )
