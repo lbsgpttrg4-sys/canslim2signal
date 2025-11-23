@@ -151,69 +151,69 @@ def compute_today_row(ticker: str, cfg: StrategyConfig):
 
     # --- Score Calculation ---
     score = compute_indicators_and_score(close, cfg).iloc[-1]
-    ########################OLDONE##############
-    # # --- Regime logic ---
-    # trend_up = (close.iloc[-1] > sma_long) and (ema_short > sma_long)
-    # trend_down = (close.iloc[-1] < sma_long) and (ema_short < sma_long)
-    # momentum_bull = rsi_val >= cfg.rsi_bull
-    # momentum_bear = rsi_val <= cfg.rsi_bear
-    # trend_strength_ok = adx_val >= cfg.adx_trend_thr
-    # high_vol = (atr_val / close.iloc[-1]) >= cfg.atr_risk_cut
+    ########################uncomment to enable regime OLDONE##############
+    # --- Regime logic ---
+    trend_up = (close.iloc[-1] > sma_long) and (ema_short > sma_long)
+    trend_down = (close.iloc[-1] < sma_long) and (ema_short < sma_long)
+    momentum_bull = rsi_val >= cfg.rsi_bull
+    momentum_bear = rsi_val <= cfg.rsi_bear
+    trend_strength_ok = adx_val >= cfg.adx_trend_thr
+    high_vol = (atr_val / close.iloc[-1]) >= cfg.atr_risk_cut
 
-    # bull = trend_up and momentum_bull and trend_strength_ok and (not high_vol)
-    # bear = trend_down and (momentum_bear or high_vol)
+    bull = trend_up and momentum_bull and trend_strength_ok and (not high_vol)
+    bear = trend_down and (momentum_bear or high_vol)
 
-    # if bull:
-    #     regime = "BUY"
-    # elif bear:
-    #     regime = "SELL"
-    # else:
-    #     regime = "HOLD"
-
-#uncomment OLDONE block to restore 
-###############NEW REGIME BLOCK
-    # --- 1. DM direction scalar (-1..1) ---
-    dm_scalar = (plus_di_val - minus_di_val) / (plus_di_val + minus_di_val + 1e-9)
-    dm_scalar = max(min(dm_scalar, 1.0), -1.0)
-    
-    # --- 2. Signed trend strength (-1..1) ---
-    adx_norm = adx_val / getattr(cfg, "adx_norm", 50.0)  # scale ADX to 0..1
-    adx_norm = max(min(adx_norm, 1.0), 0.0)
-    signed_trend = adx_norm * dm_scalar
-    signed_trend = max(min(signed_trend, 1.0), -1.0)
-    
-    # --- 3. Trend & price scores (-1..1) ---
-    trend_score = ((ema_short - sma_long) + (close.iloc[-1] - sma_long)) / (sma_long + 1e-9)
-    trend_score = max(min(trend_score, 1.0), -1.0)
-    
-    # --- 4. RSI momentum (-1..1) ---
-    rsi_score = (rsi_val - 50.0) / 50.0
-    rsi_score = max(min(rsi_score, 1.0), -1.0)
-    
-
-    # --- 6. Weighted combined score ---
-    score_raw = (
-        0.5 * trend_score +
-        1.2 * signed_trend +
-        0.8 * rsi_score
-    )
-    score = score_raw / (1.0 + 1.0 + 0.8 )  # normalize to approx -1..1
-    
-    # --- 7. Thresholds ---
-    bull_thr = getattr(cfg, "bull_thr", 0.35)
-    bear_thr = getattr(cfg, "bear_thr", -0.15)
-    
-    # --- 8. Boolean regime decisions ---
-    bull = score >= bull_thr
-    bear = score <= bear_thr
-    
-    # --- 9. Final regime ---
     if bull:
         regime = "BUY"
     elif bear:
         regime = "SELL"
     else:
-        regime = "HOLD"
+    #     regime = "HOLD"
+
+#uncomment OLDONE block to restore 
+# ###############uncomment to enable NEW REGIME BLOCK
+#     # --- 1. DM direction scalar (-1..1) ---
+#     dm_scalar = (plus_di_val - minus_di_val) / (plus_di_val + minus_di_val + 1e-9)
+#     dm_scalar = max(min(dm_scalar, 1.0), -1.0)
+    
+#     # --- 2. Signed trend strength (-1..1) ---
+#     adx_norm = adx_val / getattr(cfg, "adx_norm", 50.0)  # scale ADX to 0..1
+#     adx_norm = max(min(adx_norm, 1.0), 0.0)
+#     signed_trend = adx_norm * dm_scalar
+#     signed_trend = max(min(signed_trend, 1.0), -1.0)
+    
+#     # --- 3. Trend & price scores (-1..1) ---
+#     trend_score = ((ema_short - sma_long) + (close.iloc[-1] - sma_long)) / (sma_long + 1e-9)
+#     trend_score = max(min(trend_score, 1.0), -1.0)
+    
+#     # --- 4. RSI momentum (-1..1) ---
+#     rsi_score = (rsi_val - 50.0) / 50.0
+#     rsi_score = max(min(rsi_score, 1.0), -1.0)
+    
+
+#     # --- 6. Weighted combined score ---
+#     score_raw = (
+#         0.5 * trend_score +
+#         1.2 * signed_trend +
+#         0.8 * rsi_score
+#     )
+#     score = score_raw / (1.0 + 1.0 + 0.8 )  # normalize to approx -1..1
+    
+#     # --- 7. Thresholds ---
+#     bull_thr = getattr(cfg, "bull_thr", 0.35)
+#     bear_thr = getattr(cfg, "bear_thr", -0.15)
+    
+#     # --- 8. Boolean regime decisions ---
+#     bull = score >= bull_thr
+#     bear = score <= bear_thr
+    
+#     # --- 9. Final regime ---
+#     if bull:
+#         regime = "BUY"
+#     elif bear:
+#         regime = "SELL"
+#     else:
+#         regime = "HOLD"
 
 
 
