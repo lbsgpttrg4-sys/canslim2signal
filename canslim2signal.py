@@ -168,9 +168,9 @@ def compute_today_row(ticker: str, cfg: StrategyConfig):
     elif bear:
         regime = "SELL"
     else:
-    #     regime = "HOLD"
+        regime = "HOLD"
 
-#uncomment OLDONE block to restore 
+
 # ###############uncomment to enable NEW REGIME BLOCK
 #     # --- 1. DM direction scalar (-1..1) ---
 #     dm_scalar = (plus_di_val - minus_di_val) / (plus_di_val + minus_di_val + 1e-9)
